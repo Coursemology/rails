@@ -1,4 +1,11 @@
 ## Rails 5.1.6 (March 29, 2018) ##
+*   Fix eager loading/preloading association with scope including joins.
+
+    Fixes #28324.
+
+    *Ryuta Kamizono*
+
+*   Fix transactions to apply state to child transactions
 
 *   MySQL: Support mysql2 0.5.x.
 

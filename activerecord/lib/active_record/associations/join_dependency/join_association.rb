@@ -34,28 +34,18 @@ module ActiveRecord
             table = tables.shift
             klass = reflection.klass
 
-            join_keys   = reflection.join_keys
-            key         = join_keys.key
-            foreign_key = join_keys.foreign_key
-
-            constraint = build_constraint(klass, table, key, foreign_table, foreign_key)
-
-            rel = reflection.join_scope(table)
-
-            if rel && !rel.arel.constraints.empty?
-              binds += rel.bound_attributes
-              constraint = constraint.and rel.arel.constraints
-            end
-
-            if reflection.type
-              value = foreign_klass.base_class.name
-              column = klass.columns_hash[reflection.type.to_s]
-
-              binds << Relation::QueryAttribute.new(column.name, value, klass.type_for_attribute(column.name))
-              constraint = constraint.and klass.arel_attribute(reflection.type, table).eq(Arel::Nodes::BindParam.new)
-            end
+            constraint = reflection.build_join_constraint(table, foreign_table)
 
             joins << table.create_join(table, table.create_on(constraint), join_type)
+
+            join_scope = reflection.join_scope(table, foreign_klass)
+
+            if join_scope.arel.constraints.any?
+              binds.concat join_scope.bound_attributes
+              joins.concat join_scope.arel.join_sources
+              right = joins.last.right
+              right.expr = right.expr.and(join_scope.arel.constraints)
+            end
 
             # The current table in this iteration becomes the foreign table in the next
             foreign_table, foreign_klass = table, klass

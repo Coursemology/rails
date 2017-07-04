@@ -11,7 +11,6 @@ module ActiveRecord
           @reflection    = reflection
           @preload_scope = preload_scope
           @model         = owners.first && owners.first.class
-          @scope         = nil
           @preloaded_records = []
         end
 
@@ -23,27 +22,9 @@ module ActiveRecord
           raise NotImplementedError
         end
 
-        def scope
-          @scope ||= build_scope
-        end
-
-        def records_for(ids)
-          scope.where(association_key_name => ids)
-        end
-
-        def table
-          klass.arel_table
-        end
-
         # The name of the key on the associated records
         def association_key_name
           raise NotImplementedError
-        end
-
-        # This is overridden by HABTM as the condition should be on the foreign_key column in
-        # the join table
-        def association_key
-          klass.arel_attribute(association_key_name, table)
         end
 
         # The name of the key on the model which declares the association
@@ -119,11 +100,19 @@ module ActiveRecord
             # Make several smaller queries if necessary or make one query if the adapter supports it
             slices = owner_keys.each_slice(klass.connection.in_clause_length || owner_keys.size)
             @preloaded_records = slices.flat_map do |slice|
-              records_for(slice).load(&block)
+              records_for(slice, &block)
             end
             @preloaded_records.group_by do |record|
               convert_key(record[association_key_name])
             end
+          end
+
+          def records_for(ids, &block)
+            scope.where(association_key_name => ids).load(&block)
+          end
+
+          def scope
+            @scope ||= build_scope
           end
 
           def reflection_scope
@@ -131,14 +120,14 @@ module ActiveRecord
           end
 
           def build_scope
-            scope = klass.scope_for_association
+            scope = klass.default_scoped
 
             if reflection.type
               scope.where!(reflection.type => model.base_class.sti_name)
             end
 
             scope.merge!(reflection_scope)
-            scope.merge!(preload_scope) if preload_scope != NULL_RELATION
+            scope.merge!(preload_scope) if preload_scope
             scope
           end
       end
